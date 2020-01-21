@@ -135,6 +135,10 @@ impl Config {
         let config = serde_yaml::from_reader(f)?;
         Ok(config)
     }
+    pub fn from_bytes(b: &[u8]) -> Result<Config, Error> {
+        let config = serde_yaml::from_slice(b)?;
+        Ok(config)
+    }
 }
 
 impl Cluster {

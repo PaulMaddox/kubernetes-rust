@@ -4,6 +4,7 @@ mod incluster_config;
 mod kube_config;
 mod utils;
 
+use crate::Result;
 use base64;
 use failure::Error;
 use reqwest::{header, Certificate, Client, Identity};
@@ -34,7 +35,7 @@ impl Configuration {
 /// let kubeconfig = config::load_kube_config()
 ///     .expect("failed to load kubeconfig");
 /// ```
-pub fn load_kube_config() -> Result<Configuration, Error> {
+pub fn load_kube_config() -> Result<Configuration> {
     load_kube_config_with(Default::default())
 }
 
@@ -46,6 +47,30 @@ pub struct ConfigOptions {
     pub user: Option<String>,
 }
 
+/// Returns a config includes authentication and cluster information from kubeconfig file represented as a slice of bytes.
+pub fn from_bytes(b: &[u8]) -> Result<Configuration> {
+    from_bytes_with(b, Default::default())
+}
+
+/// Returns a config includes authentication and cluster information from a byte slice representation of a kubeconfig file.
+///
+/// # Example
+/// ```no_run
+/// use kubernetes::config;
+///
+/// let kubeconfig = config::from_bytes(b)
+///     .expect("failed to load kubeconfig");
+/// ```
+pub fn from_bytes_with(b: &[u8], options: ConfigOptions) -> Result<Configuration> {
+    let kubeconfig = utils::kubeconfig_path()
+        .or_else(utils::default_kube_path)
+        .ok_or(format_err!("Unable to load kubeconfig"))?;
+
+    let loader = KubeConfigLoader::from_bytes(b, options.context, options.cluster, options.user)?;
+
+    build_config(loader)
+}
+
 /// Returns a config includes authentication and cluster information from kubeconfig file.
 ///
 /// # Example
@@ -55,13 +80,18 @@ pub struct ConfigOptions {
 /// let kubeconfig = config::load_kube_config()
 ///     .expect("failed to load kubeconfig");
 /// ```
-pub fn load_kube_config_with(options: ConfigOptions) -> Result<Configuration, Error> {
+pub fn load_kube_config_with(options: ConfigOptions) -> Result<Configuration> {
     let kubeconfig = utils::kubeconfig_path()
         .or_else(utils::default_kube_path)
         .ok_or(format_err!("Unable to load kubeconfig"))?;
 
     let loader =
         KubeConfigLoader::load(kubeconfig, options.context, options.cluster, options.user)?;
+
+    build_config(loader)
+}
+
+fn build_config(loader: KubeConfigLoader) -> Result<Configuration> {
     let token = match &loader.user.token {
         Some(token) => Some(token.clone()),
         None => {
@@ -136,7 +166,7 @@ pub fn load_kube_config_with(options: ConfigOptions) -> Result<Configuration, Er
 /// let kubeconfig = config::incluster_config()
 ///     .expect("failed to load incluster config");
 /// ```
-pub fn incluster_config() -> Result<Configuration, Error> {
+pub fn incluster_config() -> Result<Configuration> {
     let server = incluster_config::kube_server().ok_or(format_err!(
         "Unable to load incluster config, {} and {} must be defined",
         incluster_config::SERVICE_HOSTENV,

@@ -18,3 +18,5 @@ extern crate url;
 pub mod client;
 pub mod config;
 mod oauth2;
+
+pub type Result<T> = std::result::Result<T, failure::Error>;
